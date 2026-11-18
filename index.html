@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Innovapoly UQ</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.1/dist/peerjs.min.js"></script>
 <script>window.Peer||document.write('<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.1/dist/peerjs.min.js"><\/script>')</script>
 <style>
@@ -524,6 +525,15 @@ const PEER_CFG = {debug:0, config:{iceServers:[
   {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'],username:'openrelayproject',credential:'openrelayproject'}
 ], iceCandidatePoolSize:4}};
 const ls = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }, del(k){ try{ localStorage.removeItem(k); }catch(e){} } };
+const ICE_URL = String(window.ICE_URL||''), ICE_STATIC = Array.isArray(window.ICE_SERVERS) ? window.ICE_SERVERS : [];
+let turnState = (ICE_URL || ICE_STATIC.length) ? 'cargando' : 'ninguno';
+function setTurn(list){
+  const ok = Array.isArray(list) && list.length;
+  if(ok){ PEER_CFG.config.iceServers = PEER_CFG.config.iceServers.filter(x=>!JSON.stringify(x.urls).includes('openrelay.metered.ca')).concat(list); }
+  turnState = ok ? 'ok' : 'error'; if(typeof view!=='undefined' && view==='landing') render();
+}
+if(ICE_STATIC.length) setTurn(ICE_STATIC);
+else if(ICE_URL) fetch(ICE_URL).then(r=>r.json()).then(j=>setTurn(Array.isArray(j) ? j : j && j.iceServers)).catch(()=>setTurn(null));
 let lost = false, wakeLock = null, lastRx = 0, retry = 0, retryTo = null, connGen = 0, hbIv = null;
 async function keepAwake(){ try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){} }
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && (role==='host'||role==='client')){ keepAwake(); if(role==='client' && S && !R && Date.now()-lastRx>15000) clientConnect(roomCode); } });
@@ -931,6 +941,7 @@ function renderLanding(){
     <div class="field"><label for="ownt">O crea tu propia ficha (una letra o un emoji) · +10 puntos</label><input type="text" id="ownt" maxlength="2" placeholder="Opcional" value="${store.get('inv-custom')==='1'?esc(f):''}" style="max-width:140px"></div>
     ${netMsg?`<p class="err" role="alert">${esc(netMsg)}</p>`:''}
     ${rejoin}
+    ${RM ? '' : turnState==='ok' ? '<p class="note">Conexión entre redes: relay activo ✓</p>' : turnState==='cargando' ? '<p class="note">Cargando relay de conexión…</p>' : turnState==='error' ? '<p class="err">No se pudo cargar el relay (revisa config.js). Entre redes distintas puede fallar.</p>' : '<p class="err">Sin relay propio configurado: entre redes distintas (datos móviles y Wi‑Fi) puede fallar. Configura config.js.</p>'}
     ${RM?'<p class="note">Las salas en línea usan el servicio de este artefacto: cada jugador debe abrir este mismo enlace con su sesión iniciada y con permiso de colaborador.</p>':''}
     <button class="btn primary" id="b-host" type="button" style="width:100%">Crear sala nueva (anfitrión)</button>
     <div class="sep">o</div>
